@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Steps Left — Walking Route Generator</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f2efe9;
+    --white: #ffffff;
+    --ink: #0f0f0f;
+    --mid: #888;
+    --border: #ddd9d2;
+    --accent: #e8440a;
+    --accent2: #f5a623;
+  }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+
+  .logo-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 42px;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    color: var(--ink);
+  }
+
+  .logo-sub {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--mid);
+  }
+
+  .locate-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--mid);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .locate-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .locate-btn svg { width: 14px; height: 14px; }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 300px;
+    min-width: 300px;
+    background: var(--white);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .sidebar-inner {
+    padding: 28px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    flex: 1;
+  }
+
+  .field-label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--mid);
+    margin-bottom: 9px;
+  }
+
+  .steps-input {
+    width: 100%;
+    padding: 13px 15px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 46px;
+    letter-spacing: 0.02em;
+    border: 1.5px solid var(--border);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+    -moz-appearance: textfield;
+  }
+  .steps-input::-webkit-inner-spin-button,
+  .steps-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .steps-input:focus { border-color: var(--accent); }
+  .steps-input::placeholder { color: #ccc; }
+
+  .stride-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .stride-btn {
+    flex: 1;
+    padding: 10px 5px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    line-height: 1.6;
+    border: 1.5px solid var(--border);
+    background: var(--white);
+    color: var(--mid);
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+  }
+  .stride-btn:hover, .stride-btn.active {
+    border-color: var(--ink);
+    color: var(--ink);
+    background: var(--bg);
+  }
+
+  .stats-block {
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid #f5f2ee;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--mid);
+  }
+
+  .stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.03em;
+    color: var(--ink);
+  }
+
+  .stat-val.accent { color: var(--accent); font-size: 32px; }
+
+  .result-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 15px 16px;
+    font-size: 11px;
+    line-height: 2;
+    display: none;
+  }
+  .result-box.visible { display: block; }
+  .result-box strong {
+    display: block;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.05em;
+    margin-bottom: 5px;
+    color: var(--accent);
+  }
+
+  .error-box {
+    background: #fff4f2;
+    border: 1px solid #f5c4bb;
+    padding: 12px 14px;
+    font-size: 10.5px;
+    color: #c03010;
+    line-height: 1.7;
+    display: none;
+  }
+  .error-box.visible { display: block; }
+
+  .hint {
+    font-size: 10px;
+    color: #bbb;
+    line-height: 1.8;
+    margin-top: auto;
+    padding-top: 8px;
+  }
+
+  .go-btn {
+    width: 100%;
+    padding: 18px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 30px;
+    letter-spacing: 0.08em;
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .go-btn:hover:not(:disabled) { background: var(--accent); }
+  .go-btn:disabled { background: var(--border); color: var(--mid); cursor: default; }
+  #rerollBtn:hover:not(:disabled) { background: var(--border) !important; }
+
+  /* ── Map ── */
+  .map-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  #map { width: 100%; height: 100%; }
+
+  .map-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 500;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 0.06em;
+    color: var(--mid);
+    pointer-events: none;
+  }
+  .map-overlay.hidden { display: none; }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Badge on map */
+  .map-badge {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    z-index: 400;
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 13px 18px;
+    font-size: 11px;
+    line-height: 2;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    display: none;
+    min-width: 180px;
+  }
+  .map-badge.visible { display: block; }
+  .map-badge-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.04em;
+    margin-bottom: 5px;
+  }
+
+  @media (max-width: 640px) {
+    .layout { flex-direction: column; }
+    .sidebar { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border); max-height: 55vh; }
+    .map-wrap { min-height: 45vh; }
+    header { padding: 0 16px; }
+    .logo-text { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-text">Steps Left</span>
+    <span class="logo-sub">Walking Route Generator</span>
+  </div>
+  <button class="locate-btn" id="locateBtn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
+    </svg>
+    Use my location
+  </button>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-inner">
+
+      <div>
+        <div class="field-label">Remaining Steps</div>
+        <input class="steps-input" type="number" id="stepsInput" placeholder="3500" min="100" max="200000" />
+      </div>
+
+      <div>
+        <div class="field-label">Stride Length</div>
+        <div class="stride-row">
+          <button class="stride-btn active" data-val="0.75">0.75 m<br><span style="font-size:9px;opacity:.55">avg female</span></button>
+          <button class="stride-btn" data-val="0.82">0.82 m<br><span style="font-size:9px;opacity:.55">avg male</span></button>
+          <button class="stride-btn" data-val="0.65">0.65 m<br><span style="font-size:9px;opacity:.55">short stride</span></button>
+        </div>
+      </div>
+
+      <div class="stats-block" id="statsBlock" style="display:none">
+        <div class="stat-row">
+          <span class="stat-label">Distance</span>
+          <span class="stat-val accent" id="statDist">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Est. time</span>
+          <span class="stat-val" id="statTime">—</span>
+        </div>
+        <div class="stat-row" style="border:none">
+          <span class="stat-label">Loop radius</span>
+          <span class="stat-val" id="statRadius">—</span>
+        </div>
+      </div>
+
+      <div class="error-box" id="errorBox"></div>
+      <div class="result-box" id="resultBox">
+        <strong>Route drawn</strong>
+        <span id="resultText"></span>
+      </div>
+
+      <div class="hint">
+        Enter your remaining steps and hit Find Route. Each route uses a different shape — triangle, square, zigzag, star and more. Hit Try Another Route to get a new one.
+      </div>
+
+    </div>
+
+    <button class="go-btn" id="goBtn" disabled>Find Route →</button>
+    <button class="go-btn" id="rerollBtn" style="display:none;background:#f0ede8;color:#111;border-top:1px solid #d4cfc9;">↻ Try Another Route</button>
+  </div>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-overlay" id="mapOverlay">
+      <div class="spinner"></div>
+      <span id="overlayMsg">Loading map…</span>
+    </div>
+    <div class="map-badge" id="mapBadge">
+      <div class="map-badge-title">Your Route</div>
+      <div id="badgeDetails"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────
+  let userLat = 52.3548, userLng = 4.8757; // default: Amsterdam
+  let strideLen = 0.75;
+  let map, routePolyline, startMarker;
+  let mapReady = false;
+  let routeCount = 0;
+
+  // ── Map Init ───────────────────────────────────────────────────────
+  function initMap(lat, lng) {
+    map = L.map('map', { zoomControl: false }).setView([lat, lng], 15);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> © <a href="https://carto.com">CARTO</a>',
+      subdomains: 'abcd', maxZoom: 19
+    }).addTo(map);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    const dotIcon = L.divIcon({
+      html: `<div style="width:14px;height:14px;background:#e8440a;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>`,
+      className: '', iconAnchor: [7, 7]
+    });
+    startMarker = L.marker([lat, lng], { icon: dotIcon }).addTo(map).bindPopup('<b style="font-family:DM Mono,monospace;font-size:11px">Start / Finish</b>');
+
+    mapReady = true;
+    document.getElementById('mapOverlay').classList.add('hidden');
+    updateGoBtn();
+  }
+
+  // Geolocation
+  document.getElementById('locateBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) return showError('Geolocation not supported by your browser.');
+    document.getElementById('locateBtn').textContent = 'Locating…';
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        userLat = pos.coords.latitude;
+        userLng = pos.coords.longitude;
+        if (map) {
+          map.setView([userLat, userLng], 15);
+          startMarker.setLatLng([userLat, userLng]);
+        }
+        document.getElementById('locateBtn').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg> Location set ✓`;
+      },
+      () => {
+        showError('Could not get your location. Check browser permissions.');
+        document.getElementById('locateBtn').textContent = 'Use my location';
+      }
+    );
+  });
+
+  // Init map on load
+  window.addEventListener('load', () => initMap(userLat, userLng));
+
+  // ── Stride buttons ─────────────────────────────────────────────────
+  document.querySelectorAll('.stride-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.stride-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      strideLen = parseFloat(btn.dataset.val);
+      resetBtn();
+      updateStats();
+    });
+  });
+
+  function resetBtn() {
+    routeCount = 0;
+    document.getElementById('goBtn').style.display = 'block';
+    document.getElementById('rerollBtn').style.display = 'none';
+  }
+
+  // ── Steps input ────────────────────────────────────────────────────
+  document.getElementById('stepsInput').addEventListener('input', () => {
+    clearResult();
+    resetBtn();
+    updateStats();
+  });
+
+  function updateStats() {
+    const steps = parseInt(document.getElementById('stepsInput').value) || 0;
+    if (steps < 100) {
+      document.getElementById('statsBlock').style.display = 'none';
+      updateGoBtn();
+      return;
+    }
+    const distM = steps * strideLen;
+    const distKm = (distM / 1000).toFixed(2);
+    const mins = Math.round((distM / 1000) / 5 * 60);
+    const radius = Math.round(distM / (2 * Math.PI));
+
+    document.getElementById('statDist').textContent = distKm + ' km';
+    document.getElementById('statTime').textContent = mins < 60 ? mins + ' min' : Math.floor(mins/60) + 'h ' + (mins%60) + 'm';
+    document.getElementById('statRadius').textContent = '≈ ' + radius + ' m';
+    document.getElementById('statsBlock').style.display = 'block';
+    updateGoBtn();
+  }
+
+  function updateGoBtn() {
+    const steps = parseInt(document.getElementById('stepsInput').value) || 0;
+    document.getElementById('goBtn').disabled = !(steps >= 100 && mapReady);
+  }
+
+  // ── Route ──────────────────────────────────────────────────────────
+  document.getElementById('goBtn').addEventListener('click', findRoute);
+  document.getElementById('rerollBtn').addEventListener('click', findRoute);
+
+  async function findRoute() {
+    const steps = parseInt(document.getElementById('stepsInput').value);
+    const distM = steps * strideLen;
+    clearResult();
+    hideError();
+
+    const goBtn = document.getElementById('goBtn');
+    const rerollBtn = document.getElementById('rerollBtn');
+    goBtn.disabled = true;
+    rerollBtn.disabled = true;
+    goBtn.textContent = 'Plotting…';
+    rerollBtn.textContent = '↻ Plotting…';
+
+    try {
+      const coords = await fetchOSRMRoute(userLat, userLng, distM);
+      drawRoute(coords, distM, steps);
+    } catch (e) {
+      const coords = buildCircle(userLat, userLng, distM);
+      drawRoute(coords, distM, steps, true);
+    } finally {
+      routeCount++;
+      goBtn.disabled = false;
+      rerollBtn.disabled = false;
+      goBtn.style.display = 'none';
+      rerollBtn.style.display = 'block';
+      rerollBtn.textContent = `↻ Try Another Route`;
+    }
+  }
+
+  function drawRoute(coords, distM, steps, isFallback = false) {
+    if (routePolyline) map.removeLayer(routePolyline);
+    routePolyline = L.polyline(coords, { color: '#e8440a', weight: 4.5, opacity: 0.9, lineJoin: 'round' }).addTo(map);
+    map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+
+    const actualKm = (distM / 1000).toFixed(2);
+    const mins = Math.round((distM / 1000) / 5 * 60);
+    const stepCount = Math.round(distM / strideLen).toLocaleString();
+
+    const note = isFallback ? ' (approximate — OSRM unavailable)' : '';
+    const shapeName = !isFallback && fetchOSRMRoute._lastShape ? `<span style="color:var(--accent);font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:.06em">${fetchOSRMRoute._lastShape} loop</span> · ` : '';
+    document.getElementById('resultText').innerHTML =
+      `${shapeName}<b>${actualKm} km</b> · ~${mins} min · ~${stepCount} steps${note}`;
+    document.getElementById('resultBox').classList.add('visible');
+
+    const shapeLabel = !isFallback && fetchOSRMRoute._lastShape ? fetchOSRMRoute._lastShape : 'Loop';
+    document.getElementById('badgeDetails').innerHTML =
+      `<span style="color:#aaa">Shape</span> ${shapeLabel}<br>` +
+      `<span style="color:#aaa">Distance</span> ${actualKm} km<br>` +
+      `<span style="color:#aaa">Time</span> ~${mins} min<br>` +
+      `<span style="color:#aaa">Steps</span> ~${stepCount}`;
+    document.getElementById('mapBadge').classList.add('visible');
+  }
+
+  // Move a point by absolute bearing (deg) and distance (m)
+  function movePoint(lat, lng, bearingDeg, distM) {
+    const R = 6371000;
+    const brng = bearingDeg * Math.PI / 180;
+    const lat1 = lat * Math.PI / 180;
+    const lng1 = lng * Math.PI / 180;
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distM / R) + Math.cos(lat1) * Math.sin(distM / R) * Math.cos(brng));
+    const lng2 = lng1 + Math.atan2(Math.sin(brng) * Math.sin(distM / R) * Math.cos(lat1), Math.cos(distM / R) - Math.sin(lat1) * Math.sin(lat2));
+    return [lat2 * 180 / Math.PI, lng2 * 180 / Math.PI];
+  }
+
+  // Chain-walk shape system.
+  // Each shape is a series of [relativeBearing, legFraction] pairs.
+  // Bearings are RELATIVE to the previous leg direction — like turning a wheel.
+  // This guarantees no two legs share the same street corridor geometrically.
+  // legFraction * legLen = actual distance for that leg.
+  // All legs must sum to close the loop back to origin (handled by final OSRM snap).
+  const SHAPES = [
+    {
+      name: 'Triangle',
+      // Turn 120° left at each corner — perfect equilateral
+      legs: [
+        { turn: 0,    f: 1 },
+        { turn: 120,  f: 1 },
+        { turn: 120,  f: 1 },
+      ]
+    },
+    {
+      name: 'Square',
+      // Turn 90° left at each corner
+      legs: [
+        { turn: 0,   f: 1 },
+        { turn: 90,  f: 1 },
+        { turn: 90,  f: 1 },
+        { turn: 90,  f: 1 },
+      ]
+    },
+    {
+      name: 'Rectangle',
+      // Long side, short side — 2:1 ratio
+      legs: [
+        { turn: 0,   f: 1.5 },
+        { turn: 90,  f: 0.75 },
+        { turn: 90,  f: 1.5 },
+        { turn: 90,  f: 0.75 },
+      ]
+    },
+    {
+      name: 'L-Shape',
+      // One long leg, turn, short leg, turn back differently
+      legs: [
+        { turn: 0,    f: 1.4 },
+        { turn: 90,   f: 0.9 },
+        { turn: 90,   f: 0.7 },
+        { turn: -90,  f: 0.5 },
+        { turn: 90,   f: 0.7 },
+      ]
+    },
+    {
+      name: 'Hexagon',
+      // 6 sides, 60° turns — rounder but clearly not a circle
+      legs: Array.from({ length: 6 }, () => ({ turn: 60, f: 1 }))
+    },
+    {
+      name: 'Pentagon',
+      legs: Array.from({ length: 5 }, () => ({ turn: 72, f: 1 }))
+    },
+  ];
+
+  let lastShapeIndex = -1;
+
+  // OSRM routing with chain-walk waypoints
+  async function fetchOSRMRoute(lat, lng, distM) {
+    // Pick shape — never repeat consecutively
+    let idx;
+    do { idx = Math.floor(Math.random() * SHAPES.length); } while (idx === lastShapeIndex);
+    lastShapeIndex = idx;
+    const shape = SHAPES[idx];
+
+    // Compute leg length so total perimeter ≈ distM
+    const totalFrac = shape.legs.reduce((s, l) => s + l.f, 0);
+    const legLen = distM / totalFrac;
+
+    // Random starting bearing
+    const startBearing = Math.random() * 360;
+
+    // Build waypoints by walking each leg from the previous point
+    const waypoints = [[lat, lng]];
+    let curLat = lat, curLng = lng;
+    let curBearing = startBearing;
+
+    for (const leg of shape.legs) {
+      curBearing = (curBearing + leg.turn + 360) % 360;
+      const [nLat, nLng] = movePoint(curLat, curLng, curBearing, leg.f * legLen);
+      waypoints.push([nLat, nLng]);
+      curLat = nLat;
+      curLng = nLng;
+    }
+    // Always close back to origin
+    waypoints.push([lat, lng]);
+
+    const coordStr = waypoints.map(p => `${p[1]},${p[0]}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/foot/${coordStr}?overview=full&geometries=geojson&continue_straight=false`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('OSRM unavailable');
+    const data = await res.json();
+    if (!data.routes?.[0]) throw new Error('No route');
+
+    fetchOSRMRoute._lastShape = shape.name;
+    return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+  }
+
+  // Fallback: mathematical circle
+  function buildCircle(lat, lng, distM, n = 80) {
+    const R = 6371000;
+    const radius = distM / (2 * Math.PI);
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const angle = (2 * Math.PI * i / n);
+      const brng = angle;
+      const lat1 = lat * Math.PI / 180;
+      const lng1 = lng * Math.PI / 180;
+      const lat2 = Math.asin(Math.sin(lat1) * Math.cos(radius/R) + Math.cos(lat1) * Math.sin(radius/R) * Math.cos(brng));
+      const lng2 = lng1 + Math.atan2(Math.sin(brng) * Math.sin(radius/R) * Math.cos(lat1), Math.cos(radius/R) - Math.sin(lat1) * Math.sin(lat2));
+      pts.push([lat2 * 180/Math.PI, lng2 * 180/Math.PI]);
+    }
+    return pts;
+  }
+
+  function clearResult() {
+    document.getElementById('resultBox').classList.remove('visible');
+    document.getElementById('mapBadge').classList.remove('visible');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorBox');
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  function hideError() {
+    document.getElementById('errorBox').classList.remove('visible');
+  }
+</script>
+</body>
+</html>
