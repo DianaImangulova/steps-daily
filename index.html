@@ -30,7 +30,7 @@
     font-family: 'DM Mono', monospace;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100svh; /* small viewport height — accounts for mobile browser chrome */
   }
 
   /* ── Header ── */
@@ -49,7 +49,8 @@
   .logo {
     display: flex;
     align-items: baseline;
-    gap: 14px;
+    gap: 12px;
+    min-width: 0;
   }
 
   .logo-text {
@@ -58,6 +59,7 @@
     letter-spacing: 0.03em;
     line-height: 1;
     color: var(--ink);
+    flex-shrink: 0;
   }
 
   .logo-sub {
@@ -65,13 +67,16 @@
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--mid);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .locate-btn {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 16px;
+    padding: 10px 16px;
     font-family: 'DM Mono', monospace;
     font-size: 10px;
     letter-spacing: 0.12em;
@@ -81,18 +86,23 @@
     color: var(--mid);
     cursor: pointer;
     transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 44px; /* touch target */
   }
   .locate-btn:hover { border-color: var(--ink); color: var(--ink); }
-  .locate-btn svg { width: 14px; height: 14px; }
+  .locate-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .locate-btn-label { display: inline; }
 
   /* ── Layout ── */
   .layout {
     display: flex;
     flex: 1;
     overflow: hidden;
+    position: relative;
   }
 
-  /* ── Sidebar ── */
+  /* ── Sidebar (desktop) ── */
   .sidebar {
     width: 300px;
     min-width: 300px;
@@ -101,6 +111,7 @@
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    z-index: 20;
   }
 
   .sidebar-inner {
@@ -144,7 +155,7 @@
 
   .stride-btn {
     flex: 1;
-    padding: 10px 5px;
+    padding: 12px 5px;
     font-family: 'DM Mono', monospace;
     font-size: 10px;
     line-height: 1.6;
@@ -154,6 +165,7 @@
     cursor: pointer;
     transition: all 0.12s;
     text-align: center;
+    min-height: 52px; /* touch target */
   }
   .stride-btn:hover, .stride-btn.active {
     border-color: var(--ink);
@@ -239,6 +251,7 @@
     cursor: pointer;
     transition: background 0.15s;
     flex-shrink: 0;
+    min-height: 64px;
   }
   .go-btn:hover:not(:disabled) { background: var(--accent); }
   .go-btn:disabled { background: var(--border); color: var(--mid); cursor: default; }
@@ -303,12 +316,108 @@
     margin-bottom: 5px;
   }
 
-  @media (max-width: 640px) {
+  /* ── Mobile: bottom sheet ── */
+  @media (max-width: 680px) {
+    header {
+      padding: 0 16px;
+      height: 56px;
+    }
+
+    .logo-text { font-size: 34px; }
+    .logo-sub { display: none; }
+
+    /* Location button: icon only on mobile */
+    .locate-btn-label { display: none; }
+    .locate-btn { padding: 10px 12px; }
+
     .layout { flex-direction: column; }
-    .sidebar { width: 100%; min-width: unset; border-right: none; border-bottom: 1px solid var(--border); max-height: 55vh; }
-    .map-wrap { min-height: 45vh; }
-    header { padding: 0 16px; }
-    .logo-text { font-size: 32px; }
+
+    /* Map fills full screen */
+    .map-wrap {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* Bottom sheet sits over map */
+    .sidebar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      min-width: unset;
+      border-right: none;
+      border-top: 1px solid var(--border);
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+      max-height: 72vh;
+      overflow-y: auto;
+      z-index: 30;
+      /* Allow pulling up */
+      transition: max-height 0.3s ease;
+    }
+
+    /* Drag handle */
+    .sidebar::before {
+      content: '';
+      display: block;
+      width: 36px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 12px auto 0;
+      flex-shrink: 0;
+    }
+
+    .sidebar-inner {
+      padding: 16px 18px 12px;
+      gap: 16px;
+    }
+
+    .steps-input {
+      font-size: 36px;
+      padding: 10px 13px;
+    }
+
+    .stride-btn {
+      padding: 14px 4px;
+      min-height: 56px;
+    }
+
+    .stat-val { font-size: 20px; }
+    .stat-val.accent { font-size: 28px; }
+
+    .go-btn {
+      font-size: 26px;
+      padding: 16px;
+      /* Safe area for iPhone home indicator */
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    .hint { display: none; } /* hide on mobile to save space */
+
+    /* Map badge: bottom-left on mobile (above sheet) */
+    .map-badge {
+      bottom: auto;
+      top: 16px;
+      right: 16px;
+      left: auto;
+      font-size: 10px;
+      padding: 10px 14px;
+      min-width: 0;
+    }
+
+    /* Leaflet zoom: move up from sheet */
+    .leaflet-control-zoom {
+      margin-bottom: 0 !important;
+    }
+  }
+
+  /* Tiny phones */
+  @media (max-width: 380px) {
+    .logo-text { font-size: 28px; }
+    .steps-input { font-size: 30px; }
   }
 </style>
 </head>
@@ -323,7 +432,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
     </svg>
-    Use my location
+    <span class="locate-btn-label">Use my location</span>
   </button>
 </header>
 
@@ -429,7 +538,7 @@
           map.setView([userLat, userLng], 15);
           startMarker.setLatLng([userLat, userLng]);
         }
-        document.getElementById('locateBtn').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg> Location set ✓`;
+        document.getElementById('locateBtn').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg><span class="locate-btn-label">Location set ✓</span>`;
       },
       () => {
         showError('Could not get your location. Check browser permissions.');
