@@ -326,20 +326,19 @@
     .logo-text { font-size: 34px; }
     .logo-sub { display: none; }
 
-    /* Location button: icon only on mobile */
     .locate-btn-label { display: none; }
     .locate-btn { padding: 10px 12px; }
 
-    .layout { flex-direction: column; }
+    .layout { flex-direction: column; position: relative; }
 
-    /* Map fills full screen */
+    /* Map fills full layout area */
     .map-wrap {
       position: absolute;
       inset: 0;
       z-index: 1;
     }
 
-    /* Bottom sheet sits over map */
+    /* Bottom sheet — uses translateY for drag */
     .sidebar {
       position: absolute;
       bottom: 0;
@@ -350,71 +349,82 @@
       border-right: none;
       border-top: 1px solid var(--border);
       border-radius: 16px 16px 0 0;
-      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.14);
+      /* Height is fixed; we slide it with translateY */
+      height: 72vh;
       max-height: 72vh;
-      overflow-y: auto;
+      overflow: hidden; /* inner scroll handled separately */
       z-index: 30;
-      /* Allow pulling up */
-      transition: max-height 0.3s ease;
+      transform: translateY(0);
+      transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      will-change: transform;
+      touch-action: none; /* we handle all touch ourselves */
     }
 
-    /* Drag handle */
-    .sidebar::before {
-      content: '';
-      display: block;
+    .sidebar.collapsed {
+      /* Only show the handle + ~56px of the top edge */
+      transform: translateY(calc(100% - 56px));
+    }
+
+    .sidebar.dragging {
+      transition: none; /* no spring while finger is down */
+    }
+
+    /* Drag handle area — tappable, clearly indicates sheet */
+    .sheet-handle {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0 8px;
+      cursor: grab;
+      flex-shrink: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .sheet-handle-bar {
       width: 36px;
       height: 4px;
       background: var(--border);
       border-radius: 2px;
-      margin: 12px auto 0;
-      flex-shrink: 0;
+    }
+
+    /* Inner scroll area — scrollable only when expanded */
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
     }
 
     .sidebar-inner {
-      padding: 16px 18px 12px;
+      padding: 4px 18px 12px;
       gap: 16px;
     }
 
-    .steps-input {
-      font-size: 36px;
-      padding: 10px 13px;
-    }
-
-    .stride-btn {
-      padding: 14px 4px;
-      min-height: 56px;
-    }
-
+    .steps-input { font-size: 36px; padding: 10px 13px; }
+    .stride-btn { padding: 14px 4px; min-height: 56px; }
     .stat-val { font-size: 20px; }
     .stat-val.accent { font-size: 28px; }
 
     .go-btn {
       font-size: 26px;
       padding: 16px;
-      /* Safe area for iPhone home indicator */
       padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
 
-    .hint { display: none; } /* hide on mobile to save space */
+    .hint { display: none; }
 
-    /* Map badge: bottom-left on mobile (above sheet) */
     .map-badge {
-      bottom: auto;
       top: 16px;
       right: 16px;
-      left: auto;
+      bottom: auto;
       font-size: 10px;
       padding: 10px 14px;
       min-width: 0;
     }
-
-    /* Leaflet zoom: move up from sheet */
-    .leaflet-control-zoom {
-      margin-bottom: 0 !important;
-    }
   }
 
-  /* Tiny phones */
   @media (max-width: 380px) {
     .logo-text { font-size: 28px; }
     .steps-input { font-size: 30px; }
@@ -437,7 +447,11 @@
 </header>
 
 <div class="layout">
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
+    <div class="sheet-handle" id="sheetHandle">
+      <div class="sheet-handle-bar"></div>
+    </div>
+    <div class="sidebar-scroll">
     <div class="sidebar-inner">
 
       <div>
@@ -479,7 +493,8 @@
         Enter your remaining steps and hit Find Route. Each route uses a different shape — triangle, square, zigzag, star and more. Hit Try Another Route to get a new one.
       </div>
 
-    </div>
+    </div> <!-- sidebar-inner -->
+    </div> <!-- sidebar-scroll -->
 
     <button class="go-btn" id="goBtn" disabled>Find Route →</button>
     <button class="go-btn" id="rerollBtn" style="display:none;background:#f0ede8;color:#111;border-top:1px solid #d4cfc9;">↻ Try Another Route</button>
@@ -635,6 +650,9 @@
     if (routePolyline) map.removeLayer(routePolyline);
     routePolyline = L.polyline(coords, { color: '#e8440a', weight: 4.5, opacity: 0.9, lineJoin: 'round' }).addTo(map);
     map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+
+    // Collapse sheet on mobile so map is visible
+    if (window._collapseSheet && window.innerWidth <= 680) window._collapseSheet();
 
     const actualKm = (distM / 1000).toFixed(2);
     const mins = Math.round((distM / 1000) / 5 * 60);
@@ -798,6 +816,99 @@
   function hideError() {
     document.getElementById('errorBox').classList.remove('visible');
   }
+
+  // ── Bottom sheet drag ───────────────────────────────────────────────
+  (function initSheet() {
+    const sidebar = document.getElementById('sidebar');
+    const handle = document.getElementById('sheetHandle');
+    if (!sidebar || !handle) return;
+
+    const MOBILE = () => window.innerWidth <= 680;
+
+    let startY = 0;
+    let startTranslate = 0;
+    let currentTranslate = 0;
+    let isDragging = false;
+
+    function getTranslate() {
+      const style = window.getComputedStyle(sidebar);
+      const matrix = new DOMMatrix(style.transform);
+      return matrix.m42; // translateY value
+    }
+
+    function setTranslate(y) {
+      const maxSlide = sidebar.offsetHeight - 56;
+      y = Math.max(0, Math.min(y, maxSlide));
+      sidebar.style.transform = `translateY(${y}px)`;
+      currentTranslate = y;
+    }
+
+    function snapSheet() {
+      const maxSlide = sidebar.offsetHeight - 56;
+      const threshold = maxSlide * 0.4;
+      if (currentTranslate > threshold) {
+        collapse();
+      } else {
+        expand();
+      }
+    }
+
+    function collapse() {
+      sidebar.classList.remove('dragging');
+      sidebar.classList.add('collapsed');
+      sidebar.style.transform = '';
+    }
+
+    function expand() {
+      sidebar.classList.remove('dragging');
+      sidebar.classList.remove('collapsed');
+      sidebar.style.transform = '';
+    }
+
+    // Touch on handle always drags
+    handle.addEventListener('touchstart', e => {
+      if (!MOBILE()) return;
+      isDragging = true;
+      startY = e.touches[0].clientY;
+      startTranslate = getTranslate();
+      sidebar.classList.add('dragging');
+    }, { passive: true });
+
+    // Touch on collapsed sheet peek → expand on tap
+    sidebar.addEventListener('touchstart', e => {
+      if (!MOBILE()) return;
+      if (!sidebar.classList.contains('collapsed')) return;
+      // If collapsed, any touch expands it
+      startY = e.touches[0].clientY;
+      isDragging = true;
+      startTranslate = getTranslate();
+      sidebar.classList.add('dragging');
+    }, { passive: true });
+
+    window.addEventListener('touchmove', e => {
+      if (!isDragging || !MOBILE()) return;
+      const dy = e.touches[0].clientY - startY;
+      setTranslate(startTranslate + dy);
+    }, { passive: true });
+
+    window.addEventListener('touchend', e => {
+      if (!isDragging || !MOBILE()) return;
+      isDragging = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      // Quick flick detection
+      if (Math.abs(dy) < 8) {
+        // Tap on collapsed sheet → expand
+        if (sidebar.classList.contains('collapsed')) expand();
+        return;
+      }
+      snapSheet();
+    });
+
+    // Also collapse when route is drawn (map is more useful after)
+    window._collapseSheet = collapse;
+    window._expandSheet = expand;
+  })();
 </script>
 </body>
 </html>
+
