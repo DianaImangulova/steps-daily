@@ -1,8 +1,8 @@
 # Steps Daily
 
-A lightweight walking route generator. Enter how many steps you have left to hit your daily goal — get a looped route from your location that matches the distance.
+A lightweight walking route generator. Enter how many steps you have left to hit your daily goal and get a looped route from your location that matches the distance.
 
-No app download. No account. Just open it in a browser and walk.
+Just open the generator in a browser and start your walk!
 
 **[→ Try it live](https://dianaimangulova.github.io/steps-daily)**
 
